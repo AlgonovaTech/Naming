@@ -38,8 +38,48 @@ function getSheetsClient(): sheets_v4.Sheets {
   return google.sheets({ version: "v4", auth });
 }
 
+// Header row for the sheet
+const HEADER_ROW = [
+  "V_ID",
+  "link",
+  "type",
+  "name_of_hypothesis",
+  "made_ai",
+  "style",
+  "main_ton",
+  "main_object",
+  "filename",
+];
+
+async function ensureHeaderRow(): Promise<void> {
+  const sheets = getSheetsClient();
+  
+  // Check if first row exists and has header
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: config.spreadsheetId,
+    range: `${config.sheetName}!A1:I1`,
+  });
+  
+  const firstRow = response.data.values?.[0];
+  
+  // If no header or different header, set it
+  if (!firstRow || firstRow[0] !== "V_ID") {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: config.spreadsheetId,
+      range: `${config.sheetName}!A1:I1`,
+      valueInputOption: "RAW",
+      requestBody: {
+        values: [HEADER_ROW],
+      },
+    });
+  }
+}
+
 export async function getLastId(): Promise<number> {
   const sheets = getSheetsClient();
+  
+  // Ensure header row exists
+  await ensureHeaderRow();
   
   // Get all values from column A (V_ID) to find the last ID
   const response = await sheets.spreadsheets.values.get({
