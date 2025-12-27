@@ -4,6 +4,15 @@ import { useState, useCallback, useRef } from "react";
 
 type FileStatus = "ready" | "uploading" | "uploaded" | "error" | "compressing";
 
+interface CreativeData {
+  type: string;
+  nameOfHypothesis: string;
+  aiFlag: string;
+  style: string;
+  mainTon: string;
+  mainObject: string;
+}
+
 interface FileItem {
   id: string;
   file: File;
@@ -11,19 +20,22 @@ interface FileItem {
   creativeId?: number;
   rowIndex?: number;
   error?: string;
+  data?: CreativeData;
 }
+
+// Options for each field
+const OPTIONS = {
+  type: ["static", "video"],
+  aiFlag: ["made AI", "not AI"],
+  style: ["Real", "3D", "Illustration", "Minecraft style", "Pixar style", "Cartoon", "Other"],
+  mainTon: ["bright", "light", "dark", "soft", "neutral"],
+  mainObject: ["city", "boy", "girl", "boy_girl", "statue", "building", "object", "people", "offline", "none", "other"],
+};
 
 // Compress image to max 2MB while maintaining quality
 async function compressImage(file: File, maxSizeMB = 2): Promise<File> {
-  // Skip non-images
-  if (!file.type.startsWith("image/")) {
-    return file;
-  }
-  
-  // Skip if already small enough
-  if (file.size <= maxSizeMB * 1024 * 1024) {
-    return file;
-  }
+  if (!file.type.startsWith("image/")) return file;
+  if (file.size <= maxSizeMB * 1024 * 1024) return file;
   
   return new Promise((resolve) => {
     const img = new Image();
@@ -31,7 +43,6 @@ async function compressImage(file: File, maxSizeMB = 2): Promise<File> {
     const ctx = canvas.getContext("2d");
     
     img.onload = () => {
-      // Calculate new dimensions (max 2000px on longest side)
       let { width, height } = img;
       const maxDimension = 2000;
       
@@ -49,35 +60,22 @@ async function compressImage(file: File, maxSizeMB = 2): Promise<File> {
       canvas.height = height;
       ctx?.drawImage(img, 0, 0, width, height);
       
-      // Start with high quality and reduce if needed
       let quality = 0.85;
-      
       const tryCompress = () => {
         canvas.toBlob(
           (blob) => {
-            if (!blob) {
-              resolve(file);
-              return;
-            }
-            
-            // If still too large and quality can be reduced
+            if (!blob) { resolve(file); return; }
             if (blob.size > maxSizeMB * 1024 * 1024 && quality > 0.3) {
               quality -= 0.1;
               tryCompress();
               return;
             }
-            
-            const compressedFile = new File([blob], file.name, {
-              type: "image/jpeg",
-              lastModified: Date.now(),
-            });
-            resolve(compressedFile);
+            resolve(new File([blob], file.name, { type: "image/jpeg", lastModified: Date.now() }));
           },
           "image/jpeg",
           quality
         );
       };
-      
       tryCompress();
     };
     
@@ -113,30 +111,55 @@ export default function Home() {
     setIsDragging(false);
   }, []);
 
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragging(false);
-      if (e.dataTransfer.files.length > 0) {
-        addFiles(e.dataTransfer.files);
-      }
-    },
-    [addFiles]
-  );
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files.length > 0) addFiles(e.dataTransfer.files);
+  }, [addFiles]);
 
-  const handleFileSelect = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files && e.target.files.length > 0) {
-        addFiles(e.target.files);
-        e.target.value = "";
-      }
-    },
-    [addFiles]
-  );
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      addFiles(e.target.files);
+      e.target.value = "";
+    }
+  }, [addFiles]);
 
   const removeFile = useCallback((id: string) => {
     setFiles((prev) => prev.filter((f) => f.id !== id));
   }, []);
+
+  const updateFileData = useCallback(async (
+    fileId: string,
+    field: keyof CreativeData,
+    value: string
+  ) => {
+    const fileItem = files.find(f => f.id === fileId);
+    if (!fileItem?.data || !fileItem.rowIndex || !fileItem.creativeId) return;
+
+    const newData = { ...fileItem.data, [field]: value };
+    
+    // Update local state immediately
+    setFiles((prev) =>
+      prev.map((f) =>
+        f.id === fileId ? { ...f, data: newData } : f
+      )
+    );
+
+    // Update in Google Sheets
+    try {
+      await fetch("/api/update-creative", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rowIndex: fileItem.rowIndex,
+          creativeId: fileItem.creativeId,
+          ...newData,
+        }),
+      });
+    } catch (err) {
+      console.error("Failed to update:", err);
+    }
+  }, [files]);
 
   const uploadFiles = useCallback(async () => {
     const readyFiles = files.filter((f) => f.status === "ready");
@@ -145,7 +168,6 @@ export default function Home() {
     setIsUploading(true);
     setSuccessMessage(null);
 
-    // Mark all as compressing first
     setFiles((prev) =>
       prev.map((f) =>
         f.status === "ready" ? { ...f, status: "compressing" as FileStatus } : f
@@ -153,14 +175,12 @@ export default function Home() {
     );
 
     try {
-      // Compress images before upload
       const compressedFiles: { id: string; file: File }[] = [];
       for (const fileItem of readyFiles) {
         const compressed = await compressImage(fileItem.file);
         compressedFiles.push({ id: fileItem.id, file: compressed });
       }
       
-      // Mark all as uploading
       setFiles((prev) =>
         prev.map((f) =>
           f.status === "compressing" ? { ...f, status: "uploading" as FileStatus } : f
@@ -168,28 +188,27 @@ export default function Home() {
       );
 
       const formData = new FormData();
-      compressedFiles.forEach(({ file }) => {
-        formData.append("files", file);
-      });
+      compressedFiles.forEach(({ file }) => formData.append("files", file));
 
       const response = await fetch("/api/upload-creatives", {
         method: "POST",
         body: formData,
       });
 
-      let data;
+      let responseData;
       try {
-        data = await response.json();
+        responseData = await response.json();
       } catch {
-        throw new Error(`Server error: ${response.status} ${response.statusText}`);
+        throw new Error(`Server error: ${response.status}`);
       }
 
-      if (data.status === "ok") {
+      if (responseData.status === "ok") {
         setFiles((prev) =>
           prev.map((f) => {
             if (f.status === "uploading") {
-              const result = data.results.find(
-                (r: { name: string }) => r.name === f.file.name
+              const result = responseData.results.find(
+                (r: { name: string; creativeId: number; rowIndex: number; data?: CreativeData }) => 
+                  r.name === f.file.name
               );
               if (result) {
                 return {
@@ -197,21 +216,18 @@ export default function Home() {
                   status: "uploaded" as FileStatus,
                   creativeId: result.creativeId,
                   rowIndex: result.rowIndex,
+                  data: result.data,
                 };
               }
             }
             return f;
           })
         );
-        setSuccessMessage(
-          "Creatives sent. Naming will appear in sheet automatically."
-        );
+        setSuccessMessage("Creatives sent. You can adjust parameters below.");
       } else {
         setFiles((prev) =>
           prev.map((f) =>
-            f.status === "uploading"
-              ? { ...f, status: "error" as FileStatus, error: data.error }
-              : f
+            f.status === "uploading" ? { ...f, status: "error" as FileStatus, error: responseData.error } : f
           )
         );
       }
@@ -219,11 +235,7 @@ export default function Home() {
       setFiles((prev) =>
         prev.map((f) =>
           f.status === "uploading" || f.status === "compressing"
-            ? {
-                ...f,
-                status: "error" as FileStatus,
-                error: err instanceof Error ? err.message : "Upload failed",
-              }
+            ? { ...f, status: "error" as FileStatus, error: err instanceof Error ? err.message : "Upload failed" }
             : f
         )
       );
@@ -240,27 +252,20 @@ export default function Home() {
   const hasReadyFiles = files.some((f) => f.status === "ready");
 
   return (
-    <main className="min-h-screen p-8 max-w-4xl mx-auto">
+    <main className="min-h-screen p-8 max-w-5xl mx-auto">
       <h1 className="text-2xl font-medium mb-8 text-center">Creative Upload</h1>
 
-      {/* Drop Zone */}
       <div
-        className={`
-          border border-gray-200 rounded-lg p-12 text-center cursor-pointer
-          transition-colors duration-150
-          ${isDragging ? "border-gray-400 bg-gray-50" : "hover:border-gray-300"}
-        `}
+        className={`border border-gray-200 rounded-lg p-12 text-center cursor-pointer transition-colors duration-150 ${
+          isDragging ? "border-gray-400 bg-gray-50" : "hover:border-gray-300"
+        }`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         onClick={() => fileInputRef.current?.click()}
       >
-        <p className="text-gray-500 text-sm">
-          Drop files here or click to select
-        </p>
-        <p className="text-gray-400 text-xs mt-2">
-          Images and videos (1-20 files, auto-compressed)
-        </p>
+        <p className="text-gray-500 text-sm">Drop files here or click to select</p>
+        <p className="text-gray-400 text-xs mt-2">Images and videos (1-20 files)</p>
         <input
           ref={fileInputRef}
           type="file"
@@ -271,7 +276,6 @@ export default function Home() {
         />
       </div>
 
-      {/* File List */}
       {files.length > 0 && (
         <div className="mt-8">
           <div className="flex justify-between items-center mb-4">
@@ -286,55 +290,35 @@ export default function Home() {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="space-y-4">
             {files.map((fileItem) => (
-              <div
+              <FileCard
                 key={fileItem.id}
-                className="border border-gray-200 rounded-lg p-4 relative"
-              >
-                <button
-                  onClick={() => removeFile(fileItem.id)}
-                  className="absolute top-2 right-2 text-gray-300 hover:text-gray-500 text-lg leading-none"
-                  disabled={fileItem.status === "uploading" || fileItem.status === "compressing"}
-                >
-                  ×
-                </button>
-                <p className="text-sm truncate pr-6 mb-2">{fileItem.file.name}</p>
-                <p className="text-xs text-gray-400 mb-2">
-                  {(fileItem.file.size / 1024 / 1024).toFixed(1)} MB
-                </p>
-                <StatusBadge
-                  status={fileItem.status}
-                  creativeId={fileItem.creativeId}
-                  error={fileItem.error}
-                />
-              </div>
+                fileItem={fileItem}
+                onRemove={() => removeFile(fileItem.id)}
+                onUpdateData={(field, value) => updateFileData(fileItem.id, field, value)}
+              />
             ))}
           </div>
         </div>
       )}
 
-      {/* Upload Button */}
       {files.length > 0 && (
         <div className="mt-6 text-center">
           <button
             onClick={uploadFiles}
             disabled={!hasReadyFiles || isUploading}
-            className={`
-              px-6 py-2.5 rounded-lg text-sm font-medium transition-colors
-              ${
-                hasReadyFiles && !isUploading
-                  ? "bg-gray-900 text-white hover:bg-gray-800"
-                  : "bg-gray-100 text-gray-400 cursor-not-allowed"
-              }
-            `}
+            className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              hasReadyFiles && !isUploading
+                ? "bg-gray-900 text-white hover:bg-gray-800"
+                : "bg-gray-100 text-gray-400 cursor-not-allowed"
+            }`}
           >
             {isUploading ? "Processing..." : "Upload"}
           </button>
         </div>
       )}
 
-      {/* Success Message */}
       {successMessage && (
         <div className="mt-6 text-center">
           <p className="text-sm text-green-600">{successMessage}</p>
@@ -344,15 +328,160 @@ export default function Home() {
   );
 }
 
-function StatusBadge({
-  status,
-  creativeId,
-  error,
+function FileCard({
+  fileItem,
+  onRemove,
+  onUpdateData,
 }: {
-  status: FileStatus;
-  creativeId?: number;
-  error?: string;
+  fileItem: FileItem;
+  onRemove: () => void;
+  onUpdateData: (field: keyof CreativeData, value: string) => void;
 }) {
+  const isUploaded = fileItem.status === "uploaded" && fileItem.data;
+
+  return (
+    <div className="border border-gray-200 rounded-lg p-4">
+      <div className="flex justify-between items-start mb-3">
+        <div>
+          <p className="text-sm font-medium truncate max-w-xs">{fileItem.file.name}</p>
+          <p className="text-xs text-gray-400">
+            {(fileItem.file.size / 1024 / 1024).toFixed(1)} MB
+            {fileItem.creativeId && ` · ID: ${fileItem.creativeId}`}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <StatusBadge status={fileItem.status} error={fileItem.error} />
+          <button
+            onClick={onRemove}
+            className="text-gray-300 hover:text-gray-500 text-lg leading-none"
+            disabled={fileItem.status === "uploading" || fileItem.status === "compressing"}
+          >
+            ×
+          </button>
+        </div>
+      </div>
+
+      {isUploaded && fileItem.data && (
+        <div className="space-y-2 pt-2 border-t border-gray-100">
+          <ChipRow
+            label="type"
+            value={fileItem.data.type}
+            options={OPTIONS.type}
+            onChange={(v) => onUpdateData("type", v)}
+          />
+          <ChipRowInput
+            label="hypothesis"
+            value={fileItem.data.nameOfHypothesis}
+            onChange={(v) => onUpdateData("nameOfHypothesis", v)}
+          />
+          <ChipRow
+            label="made_ai"
+            value={fileItem.data.aiFlag}
+            options={OPTIONS.aiFlag}
+            onChange={(v) => onUpdateData("aiFlag", v)}
+          />
+          <ChipRow
+            label="style"
+            value={fileItem.data.style}
+            options={OPTIONS.style}
+            onChange={(v) => onUpdateData("style", v)}
+          />
+          <ChipRow
+            label="main_ton"
+            value={fileItem.data.mainTon}
+            options={OPTIONS.mainTon}
+            onChange={(v) => onUpdateData("mainTon", v)}
+          />
+          <ChipRow
+            label="main_object"
+            value={fileItem.data.mainObject}
+            options={OPTIONS.mainObject}
+            onChange={(v) => onUpdateData("mainObject", v)}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ChipRow({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <span className="text-xs text-gray-400 w-20">{label}</span>
+      <div className="flex gap-1 flex-wrap">
+        {options.map((opt) => (
+          <button
+            key={opt}
+            onClick={() => onChange(opt)}
+            className={`px-2 py-0.5 rounded text-xs transition-colors ${
+              value === opt
+                ? "bg-gray-900 text-white"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            {opt}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ChipRowInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [inputValue, setInputValue] = useState(value);
+
+  const handleSubmit = () => {
+    if (inputValue.trim() && inputValue !== value) {
+      onChange(inputValue.trim());
+    }
+    setIsEditing(false);
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs text-gray-400 w-20">{label}</span>
+      {isEditing ? (
+        <input
+          type="text"
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          onBlur={handleSubmit}
+          onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+          className="px-2 py-0.5 rounded text-xs border border-gray-300 focus:outline-none focus:border-gray-500"
+          autoFocus
+        />
+      ) : (
+        <button
+          onClick={() => { setInputValue(value); setIsEditing(true); }}
+          className="px-2 py-0.5 rounded text-xs bg-gray-900 text-white hover:bg-gray-800"
+        >
+          {value}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function StatusBadge({ status, error }: { status: FileStatus; error?: string }) {
   const styles: Record<FileStatus, string> = {
     ready: "bg-gray-100 text-gray-600",
     compressing: "bg-yellow-50 text-yellow-600",
@@ -365,15 +494,12 @@ function StatusBadge({
     ready: "ready",
     compressing: "compressing…",
     uploading: "uploading…",
-    uploaded: creativeId ? `ID: ${creativeId}` : "uploaded",
+    uploaded: "uploaded",
     error: error || "error",
   };
 
   return (
-    <span
-      className={`inline-block px-2 py-0.5 rounded text-xs ${styles[status]}`}
-      title={error}
-    >
+    <span className={`inline-block px-2 py-0.5 rounded text-xs ${styles[status]}`} title={error}>
       {labels[status]}
     </span>
   );

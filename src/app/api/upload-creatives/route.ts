@@ -6,10 +6,20 @@ import { analyzeCreative } from "@/lib/openrouter";
 export const runtime = "nodejs";
 export const maxDuration = 60; // 60 seconds timeout for processing
 
+interface CreativeData {
+  type: string;
+  nameOfHypothesis: string;
+  aiFlag: string;
+  style: string;
+  mainTon: string;
+  mainObject: string;
+}
+
 interface UploadResult {
   name: string;
   creativeId: number;
   rowIndex: number;
+  data: CreativeData;
 }
 
 export async function POST(request: NextRequest) {
@@ -90,14 +100,19 @@ export async function POST(request: NextRequest) {
           };
         }
         
-        // Add to Google Sheets with sequential ID
-        const { creativeId, rowIndex } = await addCreative({
+        // Prepare data for sheet
+        const creativeData: CreativeData = {
           type: analysis.type,
           nameOfHypothesis: analysis.name_of_hypothesis,
           aiFlag: analysis.made_ai,
           style: analysis.style,
           mainTon: analysis.main_ton,
           mainObject: analysis.main_object,
+        };
+        
+        // Add to Google Sheets with sequential ID
+        const { creativeId, rowIndex } = await addCreative({
+          ...creativeData,
           filename: file.name,
         });
         
@@ -105,6 +120,7 @@ export async function POST(request: NextRequest) {
           name: file.name,
           creativeId,
           rowIndex,
+          data: creativeData,
         });
       } catch (fileError) {
         const errorMsg = fileError instanceof Error ? fileError.message : "Unknown error";
