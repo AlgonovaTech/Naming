@@ -108,15 +108,15 @@ export async function addCreative(data: RowData): Promise<{ creativeId: number; 
     const linkString = `V_id=${newId};type=${data.type};NameHypoth=${data.nameOfHypothesis}`;
     
     // Fill in the data at the correct column positions (0-indexed in array)
-    row[config.columns.vId - 1] = String(newId);                    // A: V_ID number
-    row[config.columns.link - 1] = linkString;                       // C: formatted link
-    row[config.columns.type - 1] = data.type;                        // E: type
-    row[config.columns.nameOfHypothesis - 1] = data.nameOfHypothesis; // F: hypothesis
-    // G: hypothesis_version - no longer used, left empty
-    row[config.columns.aiFlag - 1] = data.aiFlag;                    // H: AI flag
+    row[config.columns.vId - 1] = String(newId);                    // A: V_ID
+    row[config.columns.link - 1] = linkString;                       // C: link
+    row[config.columns.type - 1] = data.type;                        // E: type (static/video)
+    row[config.columns.nameOfHypothesis - 1] = data.nameOfHypothesis; // F: name_of_hypothesis
+    // G: hypothesis_version — не используется
+    row[config.columns.aiFlag - 1] = data.aiFlag;                    // H: made_ai
     row[config.columns.style - 1] = data.style;                      // I: style
-    row[config.columns.mainTon - 1] = data.mainTon;                  // J: main ton
-    row[config.columns.mainObject - 1] = data.mainObject;            // K: main object
+    row[config.columns.mainTon - 1] = data.mainTon;                  // J: main_ton
+    row[config.columns.mainObject - 1] = data.mainObject;            // K: main_object
     row[config.columns.filename - 1] = data.filename;                // L: filename
     
     // Append the row
