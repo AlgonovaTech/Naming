@@ -2,28 +2,35 @@ import { config } from "./config";
 
 const SYSTEM_PROMPT = `You assist a User Acquisition manager filling a creative naming table.
 
-Your task is to describe the visual concept of the creative, not its message or marketing meaning.
+Your task is to describe the VISUAL CONCEPT of the creative, not its message or marketing meaning.
 
-Follow these rules:
-– Prefer short reusable category labels.
-– Do not invent narrative or emotional interpretations.
-– Describe what is visually depicted, not what it "communicates".
-– If the concept matches no existing category, suggest a NEW short tag (2–3 words max).
-
-Produce values that are easy to standardize across many creatives.
-Avoid synonyms and stylistic variations.
+STRICT RULES:
+– Describe ONLY what is visually depicted, not what it "communicates"
+– Do NOT interpret emotions, narrative, or marketing intent
+– Prefer short, reusable category labels
+– Avoid synonyms and stylistic variations
+– If uncertain — choose the simplest closest category
+– If you must propose a new tag — keep it short (2-3 words max) and generic
 
 Return JSON ONLY with EXACTLY these fields:
 
-• type — "static" or "video"
-• name_of_hypothesis — short conceptual label (e.g. city, paper, kids, statue, banner, offline, etc.)
-• made_ai — "made AI" or "not AI"
-• style — Real / 3D / Illustration / Minecraft style / Pixar style / Cartoon / Other
-• main_ton — bright / light / dark / soft / neutral
-• main_object — city / boy / girl / boy_girl / statue / building / object / people / offline / none / other
+• type — "static" or "video" (GIF with motion = video)
 
-If uncertain — choose the simplest closest category.
-If you must propose a new tag — keep it short and generic.`;
+• name_of_hypothesis — short visual concept label. Examples:
+  city, paper, statue, banner, boy_girl, kids, offline, room, mountain, object,
+  pers, beforeafter, тсм, тсм_maths, Dzaky
+  (This describes the visual pattern, NOT the message)
+
+• made_ai — "made AI" or "not AI"
+  (If uncertain, choose "not AI")
+
+• style — Real / 3D / Illustration / Minecraft style / Pixar style / Cartoon / Other
+
+• main_ton — bright / light / dark / soft / neutral
+  (Overall visual tone of the composition, NOT emotions)
+
+• main_object — city / boy / girl / boy_girl / statue / building / object / people / offline / none / other
+  (Central focus of attention. Text/UI elements do NOT count as objects)`;
 
 export interface AIAnalysisResult {
   type: "static" | "video";

@@ -94,7 +94,6 @@ export async function addCreative(data: RowData): Promise<{ creativeId: number; 
       config.columns.link,
       config.columns.type,
       config.columns.nameOfHypothesis,
-      config.columns.hypothesisVersion,
       config.columns.aiFlag,
       config.columns.style,
       config.columns.mainTon,
@@ -105,15 +104,15 @@ export async function addCreative(data: RowData): Promise<{ creativeId: number; 
     // Create array with empty strings
     const row: string[] = new Array(maxColumn).fill("");
     
-    // Build the link string format: V_id=<id>;type=<type>;NameHypoth=<hyp>;HypothVers=1
-    const linkString = `V_id=${newId};type=${data.type};NameHypoth=${data.nameOfHypothesis};HypothVers=1`;
+    // Build the link string format: V_id=<id>;type=<type>;NameHypoth=<hyp>
+    const linkString = `V_id=${newId};type=${data.type};NameHypoth=${data.nameOfHypothesis}`;
     
     // Fill in the data at the correct column positions (0-indexed in array)
     row[config.columns.vId - 1] = String(newId);                    // A: V_ID number
     row[config.columns.link - 1] = linkString;                       // C: formatted link
     row[config.columns.type - 1] = data.type;                        // E: type
     row[config.columns.nameOfHypothesis - 1] = data.nameOfHypothesis; // F: hypothesis
-    row[config.columns.hypothesisVersion - 1] = "1";                 // G: version
+    // G: hypothesis_version - no longer used, left empty
     row[config.columns.aiFlag - 1] = data.aiFlag;                    // H: AI flag
     row[config.columns.style - 1] = data.style;                      // I: style
     row[config.columns.mainTon - 1] = data.mainTon;                  // J: main ton

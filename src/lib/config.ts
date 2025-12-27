@@ -13,13 +13,13 @@ export const config = {
   
   // Column mapping (1-indexed, matches Google Sheets columns)
   // Based on actual sheet structure:
-  // A=V_ID, B=visual, C=link, D=#REF, E=type, F=hypothesis, G=version, H=AI, I=style, J=ton, K=object, L=comment/filename
+  // A=V_ID, B=visual, C=link, D=#REF, E=type, F=hypothesis, G=(unused), H=AI, I=style, J=ton, K=object, L=comment/filename
   columns: {
     vId: parseInt(process.env.COLUMN_V_ID || "1"),           // A: V_ID number
     link: parseInt(process.env.COLUMN_LINK || "3"),          // C: formatted link string
     type: parseInt(process.env.COLUMN_TYPE || "5"),          // E: type
     nameOfHypothesis: parseInt(process.env.COLUMN_NAME_OF_HYPOTHESIS || "6"), // F: hypothesis
-    hypothesisVersion: 7,                                     // G: version (always 1 for new)
+    // hypothesisVersion removed - no longer used
     aiFlag: parseInt(process.env.COLUMN_AI_FLAG || "8"),     // H: AI flag
     style: parseInt(process.env.COLUMN_STYLE || "9"),        // I: style
     mainTon: parseInt(process.env.COLUMN_MAIN_TON || "10"),  // J: main ton
