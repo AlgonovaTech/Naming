@@ -41,23 +41,40 @@ export async function POST(request: NextRequest) {
     // Build the updated link string
     const linkString = `V_id=${data.creativeId};type=${data.type};NameHypoth=${data.nameOfHypothesis}`;
     
-    // Update the row (columns B-H, keeping A and I unchanged)
-    const row = [
-      linkString,           // B: link
-      data.type,            // C: type
-      data.nameOfHypothesis, // D: name_of_hypothesis
-      data.aiFlag,          // E: made_ai
-      data.style,           // F: style
-      data.mainTon,         // G: main_ton
-      data.mainObject,      // H: main_object
-    ];
+    // Build row array matching the column structure (A-I)
+    const maxColumn = Math.max(
+      config.columns.vId,
+      config.columns.link,
+      config.columns.type,
+      config.columns.nameOfHypothesis,
+      config.columns.aiFlag,
+      config.columns.style,
+      config.columns.mainTon,
+      config.columns.mainObject,
+      config.columns.filename
+    );
+    
+    const row: string[] = new Array(maxColumn).fill("");
+    
+    // Keep V_ID unchanged (column A), but update all other fields
+    row[config.columns.link - 1] = linkString;
+    row[config.columns.type - 1] = data.type;
+    row[config.columns.nameOfHypothesis - 1] = data.nameOfHypothesis;
+    row[config.columns.aiFlag - 1] = data.aiFlag;
+    row[config.columns.style - 1] = data.style;
+    row[config.columns.mainTon - 1] = data.mainTon;
+    row[config.columns.mainObject - 1] = data.mainObject;
+    // filename stays unchanged
+    
+    // Update columns B-H (indices 1-7 in the row, but we skip A and I)
+    const updateRow = row.slice(1, 8); // B through H
     
     await sheets.spreadsheets.values.update({
       spreadsheetId: config.spreadsheetId,
       range: `${config.sheetName}!B${data.rowIndex}:H${data.rowIndex}`,
       valueInputOption: "RAW",
       requestBody: {
-        values: [row],
+        values: [updateRow],
       },
     });
     
@@ -70,4 +87,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
