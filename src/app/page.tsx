@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef } from "react";
 
-type FileStatus = "ready" | "uploading" | "uploaded" | "error";
+type FileStatus = "ready" | "uploading" | "uploaded" | "error" | "compressing";
 
 interface FileItem {
   id: string;
@@ -11,6 +11,79 @@ interface FileItem {
   creativeId?: number;
   rowIndex?: number;
   error?: string;
+}
+
+// Compress image to max 2MB while maintaining quality
+async function compressImage(file: File, maxSizeMB = 2): Promise<File> {
+  // Skip non-images
+  if (!file.type.startsWith("image/")) {
+    return file;
+  }
+  
+  // Skip if already small enough
+  if (file.size <= maxSizeMB * 1024 * 1024) {
+    return file;
+  }
+  
+  return new Promise((resolve) => {
+    const img = new Image();
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    
+    img.onload = () => {
+      // Calculate new dimensions (max 2000px on longest side)
+      let { width, height } = img;
+      const maxDimension = 2000;
+      
+      if (width > maxDimension || height > maxDimension) {
+        if (width > height) {
+          height = (height / width) * maxDimension;
+          width = maxDimension;
+        } else {
+          width = (width / height) * maxDimension;
+          height = maxDimension;
+        }
+      }
+      
+      canvas.width = width;
+      canvas.height = height;
+      ctx?.drawImage(img, 0, 0, width, height);
+      
+      // Start with high quality and reduce if needed
+      let quality = 0.85;
+      
+      const tryCompress = () => {
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              resolve(file);
+              return;
+            }
+            
+            // If still too large and quality can be reduced
+            if (blob.size > maxSizeMB * 1024 * 1024 && quality > 0.3) {
+              quality -= 0.1;
+              tryCompress();
+              return;
+            }
+            
+            const compressedFile = new File([blob], file.name, {
+              type: "image/jpeg",
+              lastModified: Date.now(),
+            });
+            resolve(compressedFile);
+          },
+          "image/jpeg",
+          quality
+        );
+      };
+      
+      tryCompress();
+    };
+    
+    img.onerror = () => resolve(file);
+    img.src = URL.createObjectURL(file);
+  });
 }
 
 export default function Home() {
@@ -72,17 +145,31 @@ export default function Home() {
     setIsUploading(true);
     setSuccessMessage(null);
 
-    // Mark all as uploading
+    // Mark all as compressing first
     setFiles((prev) =>
       prev.map((f) =>
-        f.status === "ready" ? { ...f, status: "uploading" as FileStatus } : f
+        f.status === "ready" ? { ...f, status: "compressing" as FileStatus } : f
       )
     );
 
     try {
+      // Compress images before upload
+      const compressedFiles: { id: string; file: File }[] = [];
+      for (const fileItem of readyFiles) {
+        const compressed = await compressImage(fileItem.file);
+        compressedFiles.push({ id: fileItem.id, file: compressed });
+      }
+      
+      // Mark all as uploading
+      setFiles((prev) =>
+        prev.map((f) =>
+          f.status === "compressing" ? { ...f, status: "uploading" as FileStatus } : f
+        )
+      );
+
       const formData = new FormData();
-      readyFiles.forEach((fileItem) => {
-        formData.append("files", fileItem.file);
+      compressedFiles.forEach(({ file }) => {
+        formData.append("files", file);
       });
 
       const response = await fetch("/api/upload-creatives", {
@@ -90,7 +177,12 @@ export default function Home() {
         body: formData,
       });
 
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+      } catch {
+        throw new Error(`Server error: ${response.status} ${response.statusText}`);
+      }
 
       if (data.status === "ok") {
         setFiles((prev) =>
@@ -126,7 +218,7 @@ export default function Home() {
     } catch (err) {
       setFiles((prev) =>
         prev.map((f) =>
-          f.status === "uploading"
+          f.status === "uploading" || f.status === "compressing"
             ? {
                 ...f,
                 status: "error" as FileStatus,
@@ -167,7 +259,7 @@ export default function Home() {
           Drop files here or click to select
         </p>
         <p className="text-gray-400 text-xs mt-2">
-          Images and videos (1-20 files)
+          Images and videos (1-20 files, auto-compressed)
         </p>
         <input
           ref={fileInputRef}
@@ -203,13 +295,13 @@ export default function Home() {
                 <button
                   onClick={() => removeFile(fileItem.id)}
                   className="absolute top-2 right-2 text-gray-300 hover:text-gray-500 text-lg leading-none"
-                  disabled={fileItem.status === "uploading"}
+                  disabled={fileItem.status === "uploading" || fileItem.status === "compressing"}
                 >
                   ×
                 </button>
                 <p className="text-sm truncate pr-6 mb-2">{fileItem.file.name}</p>
                 <p className="text-xs text-gray-400 mb-2">
-                  {(fileItem.file.size / 1024).toFixed(1)} KB
+                  {(fileItem.file.size / 1024 / 1024).toFixed(1)} MB
                 </p>
                 <StatusBadge
                   status={fileItem.status}
@@ -237,7 +329,7 @@ export default function Home() {
               }
             `}
           >
-            {isUploading ? "Uploading..." : "Upload"}
+            {isUploading ? "Processing..." : "Upload"}
           </button>
         </div>
       )}
@@ -263,6 +355,7 @@ function StatusBadge({
 }) {
   const styles: Record<FileStatus, string> = {
     ready: "bg-gray-100 text-gray-600",
+    compressing: "bg-yellow-50 text-yellow-600",
     uploading: "bg-blue-50 text-blue-600",
     uploaded: "bg-green-50 text-green-600",
     error: "bg-red-50 text-red-600",
@@ -270,6 +363,7 @@ function StatusBadge({
 
   const labels: Record<FileStatus, string> = {
     ready: "ready",
+    compressing: "compressing…",
     uploading: "uploading…",
     uploaded: creativeId ? `ID: ${creativeId}` : "uploaded",
     error: error || "error",
@@ -284,4 +378,3 @@ function StatusBadge({
     </span>
   );
 }
-
