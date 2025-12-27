@@ -12,17 +12,17 @@ export const config = {
   openRouterModel: process.env.OPENROUTER_MODEL || "anthropic/claude-3-haiku",
   
   // Column mapping (1-indexed)
-  // A: V_ID | C: link | E: type | F: name_of_hypothesis | H: made_ai | I: style | J: main_ton | K: main_object | L: filename
+  // A: V_ID | B: link | C: type | D: name_of_hypothesis | E: made_ai | F: style | G: main_ton | H: main_object | I: filename
   columns: {
-    vId: parseInt(process.env.COLUMN_V_ID || "1"),
-    link: parseInt(process.env.COLUMN_LINK || "3"),
-    type: parseInt(process.env.COLUMN_TYPE || "5"),
-    nameOfHypothesis: parseInt(process.env.COLUMN_NAME_OF_HYPOTHESIS || "6"),
-    aiFlag: parseInt(process.env.COLUMN_AI_FLAG || "8"),
-    style: parseInt(process.env.COLUMN_STYLE || "9"),
-    mainTon: parseInt(process.env.COLUMN_MAIN_TON || "10"),
-    mainObject: parseInt(process.env.COLUMN_MAIN_OBJECT || "11"),
-    filename: parseInt(process.env.COLUMN_FILENAME || "12"),
+    vId: 1,              // A
+    link: 2,             // B
+    type: 3,             // C
+    nameOfHypothesis: 4, // D
+    aiFlag: 5,           // E
+    style: 6,            // F
+    mainTon: 7,          // G
+    mainObject: 8,       // H
+    filename: 9,         // I
   },
 };
 
