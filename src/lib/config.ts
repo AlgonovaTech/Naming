@@ -11,30 +11,18 @@ export const config = {
   openRouterApiKey: process.env.OPENROUTER_API_KEY || "",
   openRouterModel: process.env.OPENROUTER_MODEL || "anthropic/claude-3-haiku",
   
-  // Column mapping (1-indexed, matches Google Sheets columns)
-  // Sheet structure:
-  // A: V_ID (число)
-  // B: visual (ссылка на figma — не заполняем)
-  // C: link (V_id=XXX;type=YYY;NameHypoth=ZZZ)
-  // D: (не используется)
-  // E: type (static / video)
-  // F: name_of_hypothesis
-  // G: hypothesis_version (не используется)
-  // H: made_ai (made AI / not AI)
-  // I: style
-  // J: main_ton
-  // K: main_object
-  // L: filename
+  // Column mapping (1-indexed)
+  // A: V_ID | C: link | E: type | F: name_of_hypothesis | H: made_ai | I: style | J: main_ton | K: main_object | L: filename
   columns: {
-    vId: parseInt(process.env.COLUMN_V_ID || "1"),                    // A: V_ID
-    link: parseInt(process.env.COLUMN_LINK || "3"),                   // C: link
-    type: parseInt(process.env.COLUMN_TYPE || "5"),                   // E: type (static/video)
-    nameOfHypothesis: parseInt(process.env.COLUMN_NAME_OF_HYPOTHESIS || "6"), // F: name_of_hypothesis
-    aiFlag: parseInt(process.env.COLUMN_AI_FLAG || "8"),              // H: made_ai
-    style: parseInt(process.env.COLUMN_STYLE || "9"),                 // I: style
-    mainTon: parseInt(process.env.COLUMN_MAIN_TON || "10"),           // J: main_ton
-    mainObject: parseInt(process.env.COLUMN_MAIN_OBJECT || "11"),     // K: main_object
-    filename: parseInt(process.env.COLUMN_FILENAME || "12"),          // L: filename
+    vId: parseInt(process.env.COLUMN_V_ID || "1"),
+    link: parseInt(process.env.COLUMN_LINK || "3"),
+    type: parseInt(process.env.COLUMN_TYPE || "5"),
+    nameOfHypothesis: parseInt(process.env.COLUMN_NAME_OF_HYPOTHESIS || "6"),
+    aiFlag: parseInt(process.env.COLUMN_AI_FLAG || "8"),
+    style: parseInt(process.env.COLUMN_STYLE || "9"),
+    mainTon: parseInt(process.env.COLUMN_MAIN_TON || "10"),
+    mainObject: parseInt(process.env.COLUMN_MAIN_OBJECT || "11"),
+    filename: parseInt(process.env.COLUMN_FILENAME || "12"),
   },
 };
 
