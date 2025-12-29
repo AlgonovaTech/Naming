@@ -1,4 +1,5 @@
 import { google } from "googleapis";
+import { Readable } from "stream";
 import { config } from "./config";
 
 // Google Drive folder ID for creative uploads
@@ -55,7 +56,6 @@ export async function uploadToDrive(
   
   console.log(`[Drive] Uploading to folder: ${DRIVE_FOLDER_ID}`);
   
-  const { Readable } = await import("stream");
   const media = {
     mimeType,
     body: Readable.from(buffer),
