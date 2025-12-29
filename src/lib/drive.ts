@@ -65,6 +65,7 @@ export async function uploadToDrive(
     requestBody: fileMetadata,
     media,
     fields: "id, webViewLink, thumbnailLink",
+    supportsAllDrives: true, // Required for shared folders
   });
   
   const fileId = file.data.id;
@@ -77,6 +78,7 @@ export async function uploadToDrive(
   // Make the file publicly viewable
   await drive.permissions.create({
     fileId,
+    supportsAllDrives: true, // Required for shared folders
     requestBody: {
       role: "reader",
       type: "anyone",
