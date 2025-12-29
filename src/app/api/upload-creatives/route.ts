@@ -53,6 +53,16 @@ export async function POST(request: NextRequest) {
     }
     
     const files = formData.getAll("files") as File[];
+    const region = formData.get("region") as string;
+    
+    if (!region || !["indonesia", "latam"].includes(region)) {
+      return NextResponse.json(
+        { status: "error", error: "Please select a region (Indonesia or Latam)" },
+        { status: 400 }
+      );
+    }
+    
+    console.log(`Uploading ${files.length} files for region: ${region}`);
     
     if (!files || files.length === 0) {
       return NextResponse.json(
@@ -180,6 +190,7 @@ export async function POST(request: NextRequest) {
     
     return NextResponse.json({
       status: "ok",
+      region,
       results,
       ...(errors.length > 0 && { warnings: errors }),
     });

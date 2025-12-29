@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef } from "react";
 
 type FileStatus = "ready" | "uploading" | "uploaded" | "error" | "compressing";
+type Region = "indonesia" | "latam" | null;
 
 interface CreativeData {
   type: string;
@@ -97,6 +98,7 @@ export default function Home() {
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [selectedRegion, setSelectedRegion] = useState<Region>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const addFiles = useCallback((newFiles: FileList | File[]) => {
@@ -197,6 +199,7 @@ export default function Home() {
 
       const formData = new FormData();
       compressedFiles.forEach(({ file }) => formData.append("files", file));
+      formData.append("region", selectedRegion || "");
 
       const response = await fetch("/api/upload-creatives", {
         method: "POST",
@@ -259,10 +262,38 @@ export default function Home() {
   }, []);
 
   const hasReadyFiles = files.some((f) => f.status === "ready");
+  const canUpload = hasReadyFiles && selectedRegion !== null;
 
   return (
     <main className="min-h-screen p-8 max-w-5xl mx-auto">
       <h1 className="text-2xl font-medium mb-8 text-center">Creative Upload</h1>
+
+      {/* Region Selector */}
+      <div className="mb-6">
+        <p className="text-sm text-gray-500 mb-3 text-center">Select region before upload:</p>
+        <div className="flex justify-center gap-3">
+          <button
+            onClick={() => setSelectedRegion("indonesia")}
+            className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-all ${
+              selectedRegion === "indonesia"
+                ? "bg-emerald-600 text-white shadow-md"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            🇮🇩 Indonesia
+          </button>
+          <button
+            onClick={() => setSelectedRegion("latam")}
+            className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-all ${
+              selectedRegion === "latam"
+                ? "bg-amber-600 text-white shadow-md"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            🌎 Latam
+          </button>
+        </div>
+      </div>
 
       <div
         className={`border border-gray-200 rounded-lg p-12 text-center cursor-pointer transition-colors duration-150 ${
@@ -314,16 +345,19 @@ export default function Home() {
 
       {files.length > 0 && (
         <div className="mt-6 text-center">
+          {!selectedRegion && hasReadyFiles && (
+            <p className="text-sm text-amber-600 mb-3">⚠️ Please select a region above</p>
+          )}
           <button
             onClick={uploadFiles}
-            disabled={!hasReadyFiles || isUploading}
+            disabled={!canUpload || isUploading}
             className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-              hasReadyFiles && !isUploading
+              canUpload && !isUploading
                 ? "bg-gray-900 text-white hover:bg-gray-800"
                 : "bg-gray-100 text-gray-400 cursor-not-allowed"
             }`}
           >
-            {isUploading ? "Processing..." : "Upload"}
+            {isUploading ? "Processing..." : `Upload to ${selectedRegion === "indonesia" ? "🇮🇩 Indonesia" : selectedRegion === "latam" ? "🌎 Latam" : "..."}`}
           </button>
         </div>
       )}
