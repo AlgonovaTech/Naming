@@ -2,26 +2,48 @@ import { google, sheets_v4 } from "googleapis";
 import { config } from "./config";
 
 // In-memory mutex for sequential ID generation
-let isLocked = false;
-const lockQueue: (() => void)[] = [];
+let creativeIdLock = false;
+let titleIdLock = false;
+const creativeLockQueue: (() => void)[] = [];
+const titleLockQueue: (() => void)[] = [];
 
-async function acquireLock(): Promise<void> {
+async function acquireCreativeLock(): Promise<void> {
   return new Promise((resolve) => {
-    if (!isLocked) {
-      isLocked = true;
+    if (!creativeIdLock) {
+      creativeIdLock = true;
       resolve();
     } else {
-      lockQueue.push(resolve);
+      creativeLockQueue.push(resolve);
     }
   });
 }
 
-function releaseLock(): void {
-  if (lockQueue.length > 0) {
-    const next = lockQueue.shift();
+function releaseCreativeLock(): void {
+  if (creativeLockQueue.length > 0) {
+    const next = creativeLockQueue.shift();
     next?.();
   } else {
-    isLocked = false;
+    creativeIdLock = false;
+  }
+}
+
+async function acquireTitleLock(): Promise<void> {
+  return new Promise((resolve) => {
+    if (!titleIdLock) {
+      titleIdLock = true;
+      resolve();
+    } else {
+      titleLockQueue.push(resolve);
+    }
+  });
+}
+
+function releaseTitleLock(): void {
+  if (titleLockQueue.length > 0) {
+    const next = titleLockQueue.shift();
+    next?.();
+  } else {
+    titleIdLock = false;
   }
 }
 
@@ -38,9 +60,10 @@ function getSheetsClient(): sheets_v4.Sheets {
   return google.sheets({ version: "v4", auth });
 }
 
-// Header row for the sheet
-const HEADER_ROW = [
+// Header row for Creative sheet
+const CREATIVE_HEADER_ROW = [
   "V_ID",
+  "preview",
   "link",
   "type",
   "name_of_hypothesis",
@@ -48,16 +71,32 @@ const HEADER_ROW = [
   "style",
   "main_ton",
   "main_object",
+  "header_text",
+  "uvp",
+  "product",
+  "offer",
   "filename",
 ];
 
-async function ensureHeaderRow(): Promise<void> {
+// Header row for Title sheet
+const TITLE_HEADER_ROW = [
+  "Text_id",
+  "ID",
+  "RU",
+  "Eng",
+  "Header_text",
+  "UVP",
+  "Product",
+  "Offer",
+];
+
+async function ensureCreativeHeaderRow(): Promise<void> {
   const sheets = getSheetsClient();
   
   // Check if first row exists and has header
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: config.spreadsheetId,
-    range: `${config.sheetName}!A1:I1`,
+    range: `${config.creativeSheetName}!A1:N1`,
   });
   
   const firstRow = response.data.values?.[0];
@@ -66,25 +105,54 @@ async function ensureHeaderRow(): Promise<void> {
   if (!firstRow || firstRow[0] !== "V_ID") {
     await sheets.spreadsheets.values.update({
       spreadsheetId: config.spreadsheetId,
-      range: `${config.sheetName}!A1:I1`,
+      range: `${config.creativeSheetName}!A1:N1`,
       valueInputOption: "RAW",
       requestBody: {
-        values: [HEADER_ROW],
+        values: [CREATIVE_HEADER_ROW],
       },
     });
   }
 }
 
-export async function getLastId(): Promise<number> {
+async function ensureTitleHeaderRow(): Promise<void> {
+  const sheets = getSheetsClient();
+  
+  try {
+    // Check if first row exists and has header
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: config.spreadsheetId,
+      range: `${config.titleSheetName}!A1:H1`,
+    });
+    
+    const firstRow = response.data.values?.[0];
+    
+    // If no header or different header, set it
+    if (!firstRow || firstRow[0] !== "Text_id") {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: config.spreadsheetId,
+        range: `${config.titleSheetName}!A1:H1`,
+        valueInputOption: "RAW",
+        requestBody: {
+          values: [TITLE_HEADER_ROW],
+        },
+      });
+    }
+  } catch (error) {
+    // Title sheet might not exist yet, that's ok
+    console.log("Title sheet might not exist:", error);
+  }
+}
+
+export async function getLastCreativeId(): Promise<number> {
   const sheets = getSheetsClient();
   
   // Ensure header row exists
-  await ensureHeaderRow();
+  await ensureCreativeHeaderRow();
   
   // Get all values from column A (V_ID) to find the last ID
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: config.spreadsheetId,
-    range: `${config.sheetName}!A:A`,
+    range: `${config.creativeSheetName}!A:A`,
   });
   
   const values = response.data.values || [];
@@ -106,6 +174,68 @@ export async function getLastId(): Promise<number> {
   return lastId;
 }
 
+export async function getLastTitleId(): Promise<number> {
+  const sheets = getSheetsClient();
+  
+  try {
+    // Ensure header row exists
+    await ensureTitleHeaderRow();
+    
+    // Get all values from column B (ID) to find the last ID
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: config.spreadsheetId,
+      range: `${config.titleSheetName}!B:B`,
+    });
+    
+    const values = response.data.values || [];
+    
+    // Find the last row with a numeric ID (skip header row)
+    let lastId = 0;
+    
+    for (let i = values.length - 1; i >= 1; i--) {
+      const cell = values[i]?.[0];
+      if (cell) {
+        const num = parseInt(String(cell), 10);
+        if (!isNaN(num) && num > 0) {
+          lastId = num;
+          break;
+        }
+      }
+    }
+    
+    return lastId;
+  } catch (error) {
+    console.log("Title sheet might not exist:", error);
+    return 0;
+  }
+}
+
+// Backward compatibility
+export const getLastId = getLastCreativeId;
+
+export interface CreativeRowData {
+  type: string;
+  nameOfHypothesis: string;
+  aiFlag: string;
+  style: string;
+  mainTon: string;
+  mainObject: string;
+  headerText: string;
+  uvp: string;
+  product: string;
+  offer: string;
+  filename: string;
+  previewUrl: string; // URL from Google Drive
+}
+
+export interface TitleRowData {
+  headerText: string;
+  uvp: string;
+  product: string;
+  offer: string;
+}
+
+// Backward compatibility interface
 export interface RowData {
   type: string;
   nameOfHypothesis: string;
@@ -117,52 +247,45 @@ export interface RowData {
 }
 
 // Function to add creative with proper locking
-export async function addCreative(data: RowData): Promise<{ creativeId: number; rowIndex: number }> {
-  await acquireLock();
+export async function addCreative(data: CreativeRowData): Promise<{ creativeId: number; rowIndex: number }> {
+  await acquireCreativeLock();
   
   try {
     const sheets = getSheetsClient();
     
     // Get current last ID to ensure sequential
-    const lastId = await getLastId();
+    const lastId = await getLastCreativeId();
     const newId = lastId + 1;
-    
-    // Build the row based on column configuration
-    // Find max column to size the array
-    const maxColumn = Math.max(
-      config.columns.vId,
-      config.columns.link,
-      config.columns.type,
-      config.columns.nameOfHypothesis,
-      config.columns.aiFlag,
-      config.columns.style,
-      config.columns.mainTon,
-      config.columns.mainObject,
-      config.columns.filename
-    );
-    
-    // Create array with empty strings
-    const row: string[] = new Array(maxColumn).fill("");
     
     // Build the link string format: V_id=<id>;type=<type>;NameHypoth=<hyp>
     const linkString = `V_id=${newId};type=${data.type};NameHypoth=${data.nameOfHypothesis}`;
     
-    // Fill in the data at the correct column positions (0-indexed in array)
-    row[config.columns.vId - 1] = String(newId);
-    row[config.columns.link - 1] = linkString;
-    row[config.columns.type - 1] = data.type;
-    row[config.columns.nameOfHypothesis - 1] = data.nameOfHypothesis;
-    row[config.columns.aiFlag - 1] = data.aiFlag;
-    row[config.columns.style - 1] = data.style;
-    row[config.columns.mainTon - 1] = data.mainTon;
-    row[config.columns.mainObject - 1] = data.mainObject;
-    row[config.columns.filename - 1] = data.filename;
+    // Build the preview formula for Google Sheets
+    const previewFormula = data.previewUrl ? `=IMAGE("${data.previewUrl}")` : "";
+    
+    // Build row array (A-N = 14 columns)
+    const row: string[] = [
+      String(newId),                    // A: V_ID
+      previewFormula,                   // B: preview (=IMAGE formula)
+      linkString,                       // C: link
+      data.type,                        // D: type
+      data.nameOfHypothesis,            // E: name_of_hypothesis
+      data.aiFlag,                      // F: made_ai
+      data.style,                       // G: style
+      data.mainTon,                     // H: main_ton
+      data.mainObject,                  // I: main_object
+      data.headerText,                  // J: header_text
+      data.uvp,                         // K: uvp
+      data.product,                     // L: product
+      data.offer,                       // M: offer
+      data.filename,                    // N: filename
+    ];
     
     // Append the row
     const appendResponse = await sheets.spreadsheets.values.append({
       spreadsheetId: config.spreadsheetId,
-      range: `${config.sheetName}!A:A`,
-      valueInputOption: "RAW",
+      range: `${config.creativeSheetName}!A:A`,
+      valueInputOption: "USER_ENTERED", // Use USER_ENTERED to parse formulas
       insertDataOption: "INSERT_ROWS",
       requestBody: {
         values: [row],
@@ -176,6 +299,124 @@ export async function addCreative(data: RowData): Promise<{ creativeId: number; 
     
     return { creativeId: newId, rowIndex };
   } finally {
-    releaseLock();
+    releaseCreativeLock();
   }
+}
+
+// Function to add title row
+export async function addTitle(data: TitleRowData): Promise<{ titleId: number; rowIndex: number }> {
+  await acquireTitleLock();
+  
+  try {
+    const sheets = getSheetsClient();
+    
+    // Ensure header exists
+    await ensureTitleHeaderRow();
+    
+    // Get current last ID to ensure sequential
+    const lastId = await getLastTitleId();
+    const newId = lastId + 1;
+    
+    // Text_id formula: =B{row}&"_"&E{row}&"_"&F{row}&"_"&G{row}&"_"&H{row}
+    // This will be set after we know the row number
+    
+    // Build row array (A-H = 8 columns)
+    // A: Text_id will be set as formula after append
+    const row: string[] = [
+      "",                               // A: Text_id (formula added after)
+      String(newId),                    // B: ID
+      "",                               // C: RU (Google Translate formula)
+      data.headerText,                  // D: Eng (original header text)
+      data.headerText,                  // E: Header_text
+      data.uvp,                         // F: UVP
+      data.product,                     // G: Product
+      data.offer,                       // H: Offer
+    ];
+    
+    // Append the row
+    const appendResponse = await sheets.spreadsheets.values.append({
+      spreadsheetId: config.spreadsheetId,
+      range: `${config.titleSheetName}!A:A`,
+      valueInputOption: "RAW",
+      insertDataOption: "INSERT_ROWS",
+      requestBody: {
+        values: [row],
+      },
+    });
+    
+    // Parse the updated range to get row index
+    const updatedRange = appendResponse.data.updates?.updatedRange || "";
+    const rowMatch = updatedRange.match(/!A(\d+)/);
+    const rowIndex = rowMatch ? parseInt(rowMatch[1], 10) : 0;
+    
+    if (rowIndex > 0) {
+      // Now set the Text_id formula and RU translation formula
+      const textIdFormula = `=B${rowIndex}&"_"&E${rowIndex}&"_"&F${rowIndex}&"_"&G${rowIndex}&"_"&H${rowIndex}`;
+      const ruTranslateFormula = data.headerText !== "none" 
+        ? `=GOOGLETRANSLATE(D${rowIndex},"en","ru")` 
+        : "";
+      
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: config.spreadsheetId,
+        range: `${config.titleSheetName}!A${rowIndex}:C${rowIndex}`,
+        valueInputOption: "USER_ENTERED",
+        requestBody: {
+          values: [[textIdFormula, String(newId), ruTranslateFormula]],
+        },
+      });
+    }
+    
+    return { titleId: newId, rowIndex };
+  } finally {
+    releaseTitleLock();
+  }
+}
+
+// Update creative row (for chips editing)
+export async function updateCreativeRow(
+  rowIndex: number,
+  creativeId: number,
+  data: Partial<CreativeRowData>
+): Promise<void> {
+  const sheets = getSheetsClient();
+  
+  // First, get the current row to merge data
+  const getResponse = await sheets.spreadsheets.values.get({
+    spreadsheetId: config.spreadsheetId,
+    range: `${config.creativeSheetName}!A${rowIndex}:N${rowIndex}`,
+  });
+  
+  const currentRow = getResponse.data.values?.[0] || [];
+  
+  // Merge with new data
+  const type = data.type ?? currentRow[3] ?? "";
+  const nameOfHypothesis = data.nameOfHypothesis ?? currentRow[4] ?? "";
+  
+  // Rebuild link string
+  const linkString = `V_id=${creativeId};type=${type};NameHypoth=${nameOfHypothesis}`;
+  
+  // Build update row (columns C-N, skipping A and B)
+  const updateRow = [
+    linkString,                                           // C: link
+    type,                                                 // D: type
+    nameOfHypothesis,                                     // E: name_of_hypothesis
+    data.aiFlag ?? currentRow[5] ?? "",                   // F: made_ai
+    data.style ?? currentRow[6] ?? "",                    // G: style
+    data.mainTon ?? currentRow[7] ?? "",                  // H: main_ton
+    data.mainObject ?? currentRow[8] ?? "",               // I: main_object
+    data.headerText ?? currentRow[9] ?? "",               // J: header_text
+    data.uvp ?? currentRow[10] ?? "",                     // K: uvp
+    data.product ?? currentRow[11] ?? "",                 // L: product
+    data.offer ?? currentRow[12] ?? "",                   // M: offer
+    // N: filename stays unchanged
+  ];
+  
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: config.spreadsheetId,
+    range: `${config.creativeSheetName}!C${rowIndex}:M${rowIndex}`,
+    valueInputOption: "RAW",
+    requestBody: {
+      values: [updateRow],
+    },
+  });
 }

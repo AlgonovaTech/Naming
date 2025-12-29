@@ -11,6 +11,10 @@ interface CreativeData {
   style: string;
   mainTon: string;
   mainObject: string;
+  headerText: string;
+  uvp: string;
+  product: string;
+  offer: string;
 }
 
 interface FileItem {
@@ -19,6 +23,7 @@ interface FileItem {
   status: FileStatus;
   creativeId?: number;
   rowIndex?: number;
+  titleId?: number;
   error?: string;
   data?: CreativeData;
 }
@@ -30,6 +35,9 @@ const OPTIONS = {
   style: ["Real", "3D", "Illustration", "Minecraft style", "Pixar style", "Cartoon", "Other"],
   mainTon: ["bright", "light", "dark", "soft", "neutral"],
   mainObject: ["city", "boy", "girl", "boy_girl", "statue", "building", "object", "people", "offline", "none", "other"],
+  uvp: ["прямая продажа", "через боль", "через выгоду", "FOMO", "социальное доказательство", "other"],
+  product: ["курс математики", "курс программирования", "курс английского", "подписка", "other"],
+  offer: ["бесплатный урок", "мастер-класс", "вебинар", "бесплатный курс", "скидка", "пробный период", "other"],
 };
 
 // Compress image to max 2MB while maintaining quality
@@ -207,7 +215,7 @@ export default function Home() {
           prev.map((f) => {
             if (f.status === "uploading") {
               const result = responseData.results.find(
-                (r: { name: string; creativeId: number; rowIndex: number; data?: CreativeData }) => 
+                (r: { name: string; creativeId: number; rowIndex: number; titleId?: number; data?: CreativeData }) => 
                   r.name === f.file.name
               );
               if (result) {
@@ -216,6 +224,7 @@ export default function Home() {
                   status: "uploaded" as FileStatus,
                   creativeId: result.creativeId,
                   rowIndex: result.rowIndex,
+                  titleId: result.titleId,
                   data: result.data,
                 };
               }
@@ -223,7 +232,7 @@ export default function Home() {
             return f;
           })
         );
-        setSuccessMessage("Creatives sent. You can adjust parameters below.");
+        setSuccessMessage("Creatives uploaded! Adjust parameters below if needed.");
       } else {
         setFiles((prev) =>
           prev.map((f) =>
@@ -346,7 +355,8 @@ function FileCard({
           <p className="text-sm font-medium truncate max-w-xs">{fileItem.file.name}</p>
           <p className="text-xs text-gray-400">
             {(fileItem.file.size / 1024 / 1024).toFixed(1)} MB
-            {fileItem.creativeId && ` · ID: ${fileItem.creativeId}`}
+            {fileItem.creativeId && ` · V_ID: ${fileItem.creativeId}`}
+            {fileItem.titleId && ` · Title_ID: ${fileItem.titleId}`}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -363,6 +373,8 @@ function FileCard({
 
       {isUploaded && fileItem.data && (
         <div className="space-y-2 pt-2 border-t border-gray-100">
+          {/* Visual parameters */}
+          <div className="text-xs text-gray-500 font-medium mt-2 mb-1">Visual</div>
           <ChipRow
             label="type"
             value={fileItem.data.type}
@@ -398,6 +410,32 @@ function FileCard({
             options={OPTIONS.mainObject}
             onChange={(v) => onUpdateData("mainObject", v)}
           />
+          
+          {/* Marketing parameters */}
+          <div className="text-xs text-gray-500 font-medium mt-4 mb-1">Marketing</div>
+          <ChipRowInput
+            label="header_text"
+            value={fileItem.data.headerText}
+            onChange={(v) => onUpdateData("headerText", v)}
+          />
+          <ChipRow
+            label="uvp"
+            value={fileItem.data.uvp}
+            options={OPTIONS.uvp}
+            onChange={(v) => onUpdateData("uvp", v)}
+          />
+          <ChipRow
+            label="product"
+            value={fileItem.data.product}
+            options={OPTIONS.product}
+            onChange={(v) => onUpdateData("product", v)}
+          />
+          <ChipRow
+            label="offer"
+            value={fileItem.data.offer}
+            options={OPTIONS.offer}
+            onChange={(v) => onUpdateData("offer", v)}
+          />
         </div>
       )}
     </div>
@@ -417,7 +455,7 @@ function ChipRow({
 }) {
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      <span className="text-xs text-gray-400 w-20">{label}</span>
+      <span className="text-xs text-gray-400 w-24 flex-shrink-0">{label}</span>
       <div className="flex gap-1 flex-wrap">
         {options.map((opt) => (
           <button
@@ -458,7 +496,7 @@ function ChipRowInput({
 
   return (
     <div className="flex items-center gap-2">
-      <span className="text-xs text-gray-400 w-20">{label}</span>
+      <span className="text-xs text-gray-400 w-24 flex-shrink-0">{label}</span>
       {isEditing ? (
         <input
           type="text"
@@ -466,13 +504,14 @@ function ChipRowInput({
           onChange={(e) => setInputValue(e.target.value)}
           onBlur={handleSubmit}
           onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-          className="px-2 py-0.5 rounded text-xs border border-gray-300 focus:outline-none focus:border-gray-500"
+          className="px-2 py-0.5 rounded text-xs border border-gray-300 focus:outline-none focus:border-gray-500 flex-1 max-w-xs"
           autoFocus
         />
       ) : (
         <button
           onClick={() => { setInputValue(value); setIsEditing(true); }}
-          className="px-2 py-0.5 rounded text-xs bg-gray-900 text-white hover:bg-gray-800"
+          className="px-2 py-0.5 rounded text-xs bg-gray-900 text-white hover:bg-gray-800 max-w-xs truncate"
+          title={value}
         >
           {value}
         </button>

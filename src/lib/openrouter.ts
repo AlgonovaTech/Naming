@@ -2,11 +2,12 @@ import { config } from "./config";
 
 const SYSTEM_PROMPT = `You assist a User Acquisition manager filling a creative naming table.
 
-Your task is to describe the VISUAL CONCEPT of the creative, not its message or marketing meaning.
+Your task is to describe the VISUAL CONCEPT of the creative AND extract text/marketing information.
 
 STRICT RULES:
 – Describe ONLY what is visually depicted, not what it "communicates"
-– Do NOT interpret emotions, narrative, or marketing intent
+– For text extraction (header_text), copy the main headline/title EXACTLY as shown
+– For marketing fields (uvp, product, offer), infer from visible text and imagery
 – Prefer short, reusable category labels
 – Avoid synonyms and stylistic variations
 – If uncertain — choose the simplest closest category
@@ -30,7 +31,22 @@ Return JSON ONLY with EXACTLY these fields:
   (Overall visual tone of the composition, NOT emotions)
 
 • main_object — city / boy / girl / boy_girl / statue / building / object / people / offline / none / other
-  (Central focus of attention. Text/UI elements do NOT count as objects)`;
+  (Central focus of attention. Text/UI elements do NOT count as objects)
+
+• header_text — The main headline or title text visible on the creative (OCR).
+  Extract EXACTLY as written, including language. If no text visible, use "none"
+
+• uvp — Value proposition type detected:
+  "прямая продажа" / "через боль" / "через выгоду" / "FOMO" / "социальное доказательство" / "other"
+  (Infer from text and imagery)
+
+• product — What product/course is being advertised:
+  "курс математики" / "курс программирования" / "курс английского" / "подписка" / "other"
+  (Infer from visible text and imagery. Be specific if possible)
+
+• offer — What is being offered:
+  "бесплатный урок" / "мастер-класс" / "вебинар" / "бесплатный курс" / "скидка" / "пробный период" / "other"
+  (Look for call-to-action text)`;
 
 export interface AIAnalysisResult {
   type: "static" | "video";
@@ -39,6 +55,10 @@ export interface AIAnalysisResult {
   style: string;
   main_ton: string;
   main_object: string;
+  header_text: string;
+  uvp: string;
+  product: string;
+  offer: string;
 }
 
 export async function analyzeCreative(
@@ -59,6 +79,10 @@ export async function analyzeCreative(
       style: "Real",
       main_ton: "neutral",
       main_object: "other",
+      header_text: "none",
+      uvp: "other",
+      product: "other",
+      offer: "other",
     };
   }
   
@@ -88,12 +112,12 @@ export async function analyzeCreative(
             },
             {
               type: "text",
-              text: `Analyze this creative image. Filename: ${filename}. Return JSON only.`,
+              text: `Analyze this creative image. Filename: ${filename}. Return JSON only with all required fields.`,
             },
           ],
         },
       ],
-      max_tokens: 500,
+      max_tokens: 800,
       temperature: 0.1,
     }),
   });
@@ -128,6 +152,10 @@ export async function analyzeCreative(
       style: "Other",
       main_ton: "neutral",
       main_object: "other",
+      header_text: "none",
+      uvp: "other",
+      product: "other",
+      offer: "other",
     };
   }
 }
@@ -175,6 +203,39 @@ function normalizeAnalysisResult(result: AIAnalysisResult): AIAnalysisResult {
     }
   }
   
+  // Normalize uvp
+  const validUvp = ["прямая продажа", "через боль", "через выгоду", "FOMO", "социальное доказательство", "other"];
+  const uvpLower = String(result.uvp || "").toLowerCase();
+  let uvp = "other";
+  for (const vu of validUvp) {
+    if (uvpLower.includes(vu.toLowerCase())) {
+      uvp = vu;
+      break;
+    }
+  }
+  
+  // Normalize product
+  const validProducts = ["курс математики", "курс программирования", "курс английского", "подписка", "other"];
+  const productLower = String(result.product || "").toLowerCase();
+  let product = "other";
+  for (const vp of validProducts) {
+    if (productLower.includes(vp.toLowerCase())) {
+      product = vp;
+      break;
+    }
+  }
+  
+  // Normalize offer
+  const validOffers = ["бесплатный урок", "мастер-класс", "вебинар", "бесплатный курс", "скидка", "пробный период", "other"];
+  const offerLower = String(result.offer || "").toLowerCase();
+  let offer = "other";
+  for (const vo of validOffers) {
+    if (offerLower.includes(vo.toLowerCase())) {
+      offer = vo;
+      break;
+    }
+  }
+  
   return {
     type,
     name_of_hypothesis: String(result.name_of_hypothesis || "unknown").toLowerCase().trim(),
@@ -182,6 +243,9 @@ function normalizeAnalysisResult(result: AIAnalysisResult): AIAnalysisResult {
     style,
     main_ton,
     main_object,
+    header_text: String(result.header_text || "none").trim(),
+    uvp,
+    product,
+    offer,
   };
 }
-

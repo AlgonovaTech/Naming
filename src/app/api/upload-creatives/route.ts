@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateConfig } from "@/lib/config";
-import { addCreative } from "@/lib/sheets";
+import { addCreative, addTitle } from "@/lib/sheets";
 import { analyzeCreative } from "@/lib/openrouter";
+import { uploadToDrive } from "@/lib/drive";
 
 export const runtime = "nodejs";
 export const maxDuration = 60; // 60 seconds timeout for processing
@@ -13,12 +14,17 @@ interface CreativeData {
   style: string;
   mainTon: string;
   mainObject: string;
+  headerText: string;
+  uvp: string;
+  product: string;
+  offer: string;
 }
 
 interface UploadResult {
   name: string;
   creativeId: number;
   rowIndex: number;
+  titleId?: number;
   data: CreativeData;
 }
 
@@ -83,6 +89,17 @@ export async function POST(request: NextRequest) {
         const arrayBuffer = await file.arrayBuffer();
         const base64 = Buffer.from(arrayBuffer).toString("base64");
         
+        // Upload to Google Drive first (for preview)
+        let previewUrl = "";
+        try {
+          const driveResult = await uploadToDrive(base64, file.type, file.name);
+          previewUrl = driveResult.thumbnailLink;
+          console.log(`Uploaded to Drive: ${driveResult.fileId}`);
+        } catch (driveError) {
+          console.error(`Drive upload error for ${file.name}:`, driveError);
+          // Continue without preview if Drive upload fails
+        }
+        
         // Analyze with AI
         let analysis;
         try {
@@ -97,10 +114,14 @@ export async function POST(request: NextRequest) {
             style: "Other",
             main_ton: "neutral",
             main_object: "other",
+            header_text: "none",
+            uvp: "other",
+            product: "other",
+            offer: "other",
           };
         }
         
-        // Prepare data for sheet
+        // Prepare data for Creative sheet
         const creativeData: CreativeData = {
           type: analysis.type,
           nameOfHypothesis: analysis.name_of_hypothesis,
@@ -108,18 +129,39 @@ export async function POST(request: NextRequest) {
           style: analysis.style,
           mainTon: analysis.main_ton,
           mainObject: analysis.main_object,
+          headerText: analysis.header_text,
+          uvp: analysis.uvp,
+          product: analysis.product,
+          offer: analysis.offer,
         };
         
-        // Add to Google Sheets with sequential ID
+        // Add to Creative sheet with sequential ID
         const { creativeId, rowIndex } = await addCreative({
           ...creativeData,
           filename: file.name,
+          previewUrl,
         });
+        
+        // Also add to Title sheet (auto-populate)
+        let titleId: number | undefined;
+        try {
+          const titleResult = await addTitle({
+            headerText: analysis.header_text,
+            uvp: analysis.uvp,
+            product: analysis.product,
+            offer: analysis.offer,
+          });
+          titleId = titleResult.titleId;
+        } catch (titleError) {
+          console.error(`Title sheet error for ${file.name}:`, titleError);
+          // Continue without title if it fails
+        }
         
         results.push({
           name: file.name,
           creativeId,
           rowIndex,
+          titleId,
           data: creativeData,
         });
       } catch (fileError) {

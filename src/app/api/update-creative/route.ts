@@ -1,26 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
-import { google } from "googleapis";
-import { config, validateConfig } from "@/lib/config";
+import { validateConfig } from "@/lib/config";
+import { updateCreativeRow } from "@/lib/sheets";
 
 export const runtime = "nodejs";
-
-function getAuth() {
-  return new google.auth.JWT({
-    email: config.googleServiceAccountEmail,
-    key: config.googlePrivateKey,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-  });
-}
 
 interface UpdateRequest {
   rowIndex: number;
   creativeId: number;
-  type: string;
-  nameOfHypothesis: string;
-  aiFlag: string;
-  style: string;
-  mainTon: string;
-  mainObject: string;
+  type?: string;
+  nameOfHypothesis?: string;
+  aiFlag?: string;
+  style?: string;
+  mainTon?: string;
+  mainObject?: string;
+  headerText?: string;
+  uvp?: string;
+  product?: string;
+  offer?: string;
 }
 
 export async function POST(request: NextRequest) {
@@ -35,47 +31,24 @@ export async function POST(request: NextRequest) {
 
     const data: UpdateRequest = await request.json();
     
-    const auth = getAuth();
-    const sheets = google.sheets({ version: "v4", auth });
+    if (!data.rowIndex || !data.creativeId) {
+      return NextResponse.json(
+        { status: "error", error: "rowIndex and creativeId are required" },
+        { status: 400 }
+      );
+    }
     
-    // Build the updated link string
-    const linkString = `V_id=${data.creativeId};type=${data.type};NameHypoth=${data.nameOfHypothesis}`;
-    
-    // Build row array matching the column structure (A-I)
-    const maxColumn = Math.max(
-      config.columns.vId,
-      config.columns.link,
-      config.columns.type,
-      config.columns.nameOfHypothesis,
-      config.columns.aiFlag,
-      config.columns.style,
-      config.columns.mainTon,
-      config.columns.mainObject,
-      config.columns.filename
-    );
-    
-    const row: string[] = new Array(maxColumn).fill("");
-    
-    // Keep V_ID unchanged (column A), but update all other fields
-    row[config.columns.link - 1] = linkString;
-    row[config.columns.type - 1] = data.type;
-    row[config.columns.nameOfHypothesis - 1] = data.nameOfHypothesis;
-    row[config.columns.aiFlag - 1] = data.aiFlag;
-    row[config.columns.style - 1] = data.style;
-    row[config.columns.mainTon - 1] = data.mainTon;
-    row[config.columns.mainObject - 1] = data.mainObject;
-    // filename stays unchanged
-    
-    // Update columns B-H (indices 1-7 in the row, but we skip A and I)
-    const updateRow = row.slice(1, 8); // B through H
-    
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: config.spreadsheetId,
-      range: `${config.sheetName}!B${data.rowIndex}:H${data.rowIndex}`,
-      valueInputOption: "RAW",
-      requestBody: {
-        values: [updateRow],
-      },
+    await updateCreativeRow(data.rowIndex, data.creativeId, {
+      type: data.type,
+      nameOfHypothesis: data.nameOfHypothesis,
+      aiFlag: data.aiFlag,
+      style: data.style,
+      mainTon: data.mainTon,
+      mainObject: data.mainObject,
+      headerText: data.headerText,
+      uvp: data.uvp,
+      product: data.product,
+      offer: data.offer,
     });
     
     return NextResponse.json({ status: "ok" });
