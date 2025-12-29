@@ -78,11 +78,10 @@ const CREATIVE_HEADER_ROW = [
   "filename",
 ];
 
-// Header row for Title sheet
+// Header row for Title sheet (no RU column - English only)
 const TITLE_HEADER_ROW = [
   "Text_id",
   "ID",
-  "RU",
   "Eng",
   "Header_text",
   "UVP",
@@ -118,19 +117,23 @@ async function ensureTitleHeaderRow(): Promise<void> {
   const sheets = getSheetsClient();
   
   try {
+    console.log(`Checking Title sheet header: ${config.titleSheetName}`);
+    
     // Check if first row exists and has header
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: config.spreadsheetId,
-      range: `${config.titleSheetName}!A1:H1`,
+      range: `${config.titleSheetName}!A1:G1`,
     });
     
     const firstRow = response.data.values?.[0];
+    console.log(`Title first row:`, firstRow);
     
     // If no header or different header, set it
     if (!firstRow || firstRow[0] !== "Text_id") {
+      console.log("Setting Title header row");
       await sheets.spreadsheets.values.update({
         spreadsheetId: config.spreadsheetId,
-        range: `${config.titleSheetName}!A1:H1`,
+        range: `${config.titleSheetName}!A1:G1`,
         valueInputOption: "RAW",
         requestBody: {
           values: [TITLE_HEADER_ROW],
@@ -138,8 +141,9 @@ async function ensureTitleHeaderRow(): Promise<void> {
       });
     }
   } catch (error) {
-    // Title sheet might not exist yet, that's ok
-    console.log("Title sheet might not exist:", error);
+    // Title sheet might not exist yet - try to create header anyway
+    console.error("Error checking Title sheet:", error);
+    throw new Error(`Title sheet "${config.titleSheetName}" not found. Please create it in Google Sheets.`);
   }
 }
 
@@ -310,6 +314,8 @@ export async function addTitle(data: TitleRowData): Promise<{ titleId: number; r
   try {
     const sheets = getSheetsClient();
     
+    console.log(`Adding title to sheet: ${config.titleSheetName}`);
+    
     // Ensure header exists
     await ensureTitleHeaderRow();
     
@@ -317,20 +323,18 @@ export async function addTitle(data: TitleRowData): Promise<{ titleId: number; r
     const lastId = await getLastTitleId();
     const newId = lastId + 1;
     
-    // Text_id formula: =B{row}&"_"&E{row}&"_"&F{row}&"_"&G{row}&"_"&H{row}
-    // This will be set after we know the row number
+    console.log(`New title ID will be: ${newId}`);
     
-    // Build row array (A-H = 8 columns)
-    // A: Text_id will be set as formula after append
+    // Build row array (A-G = 7 columns, no RU column)
+    // A: Text_id (formula) | B: ID | C: Eng | D: Header_text | E: UVP | F: Product | G: Offer
     const row: string[] = [
       "",                               // A: Text_id (formula added after)
       String(newId),                    // B: ID
-      "",                               // C: RU (Google Translate formula)
-      data.headerText,                  // D: Eng (original header text)
-      data.headerText,                  // E: Header_text
-      data.uvp,                         // F: UVP
-      data.product,                     // G: Product
-      data.offer,                       // H: Offer
+      data.headerText,                  // C: Eng (original header text)
+      data.headerText,                  // D: Header_text
+      data.uvp,                         // E: UVP
+      data.product,                     // F: Product
+      data.offer,                       // G: Offer
     ];
     
     // Append the row
@@ -344,29 +348,36 @@ export async function addTitle(data: TitleRowData): Promise<{ titleId: number; r
       },
     });
     
+    console.log(`Title append response:`, appendResponse.data.updates);
+    
     // Parse the updated range to get row index
     const updatedRange = appendResponse.data.updates?.updatedRange || "";
     const rowMatch = updatedRange.match(/!A(\d+)/);
     const rowIndex = rowMatch ? parseInt(rowMatch[1], 10) : 0;
     
+    console.log(`Title row index: ${rowIndex}`);
+    
     if (rowIndex > 0) {
-      // Now set the Text_id formula and RU translation formula
-      const textIdFormula = `=B${rowIndex}&"_"&E${rowIndex}&"_"&F${rowIndex}&"_"&G${rowIndex}&"_"&H${rowIndex}`;
-      const ruTranslateFormula = data.headerText !== "none" 
-        ? `=GOOGLETRANSLATE(D${rowIndex},"en","ru")` 
-        : "";
+      // Now set the Text_id formula
+      // Format: ID_Header_UVP_Product_Offer
+      const textIdFormula = `=B${rowIndex}&"_"&D${rowIndex}&"_"&E${rowIndex}&"_"&F${rowIndex}&"_"&G${rowIndex}`;
       
       await sheets.spreadsheets.values.update({
         spreadsheetId: config.spreadsheetId,
-        range: `${config.titleSheetName}!A${rowIndex}:C${rowIndex}`,
+        range: `${config.titleSheetName}!A${rowIndex}`,
         valueInputOption: "USER_ENTERED",
         requestBody: {
-          values: [[textIdFormula, String(newId), ruTranslateFormula]],
+          values: [[textIdFormula]],
         },
       });
+      
+      console.log(`Title formula set for row ${rowIndex}`);
     }
     
     return { titleId: newId, rowIndex };
+  } catch (error) {
+    console.error("Error adding title:", error);
+    throw error;
   } finally {
     releaseTitleLock();
   }

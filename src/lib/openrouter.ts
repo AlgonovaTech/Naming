@@ -8,7 +8,7 @@ STRICT RULES:
 – Describe ONLY what is visually depicted, not what it "communicates"
 – For text extraction (header_text), copy the main headline/title EXACTLY as shown
 – For marketing fields (uvp, product, offer), infer from visible text and imagery
-– Prefer short, reusable category labels
+– Prefer short, reusable category labels in ENGLISH only
 – Avoid synonyms and stylistic variations
 – If uncertain — choose the simplest closest category
 – If you must propose a new tag — keep it short (2-3 words max) and generic
@@ -19,7 +19,7 @@ Return JSON ONLY with EXACTLY these fields:
 
 • name_of_hypothesis — short visual concept label. Examples:
   city, paper, statue, banner, boy_girl, kids, offline, room, mountain, object,
-  pers, beforeafter, тсм, тсм_maths, Dzaky
+  pers, beforeafter, tsm, tsm_maths, Dzaky
   (This describes the visual pattern, NOT the message)
 
 • made_ai — "made AI" or "not AI"
@@ -37,15 +37,15 @@ Return JSON ONLY with EXACTLY these fields:
   Extract EXACTLY as written, including language. If no text visible, use "none"
 
 • uvp — Value proposition type detected:
-  "прямая продажа" / "через боль" / "через выгоду" / "FOMO" / "социальное доказательство" / "other"
+  "direct_sale" / "pain_point" / "benefit" / "FOMO" / "social_proof" / "other"
   (Infer from text and imagery)
 
 • product — What product/course is being advertised:
-  "курс математики" / "курс программирования" / "курс английского" / "подписка" / "other"
+  "math_course" / "programming_course" / "english_course" / "subscription" / "other"
   (Infer from visible text and imagery. Be specific if possible)
 
 • offer — What is being offered:
-  "бесплатный урок" / "мастер-класс" / "вебинар" / "бесплатный курс" / "скидка" / "пробный период" / "other"
+  "free_lesson" / "masterclass" / "webinar" / "free_course" / "discount" / "trial" / "other"
   (Look for call-to-action text)`;
 
 export interface AIAnalysisResult {
@@ -204,7 +204,7 @@ function normalizeAnalysisResult(result: AIAnalysisResult): AIAnalysisResult {
   }
   
   // Normalize uvp
-  const validUvp = ["прямая продажа", "через боль", "через выгоду", "FOMO", "социальное доказательство", "other"];
+  const validUvp = ["direct_sale", "pain_point", "benefit", "FOMO", "social_proof", "other"];
   const uvpLower = String(result.uvp || "").toLowerCase();
   let uvp = "other";
   for (const vu of validUvp) {
@@ -215,7 +215,7 @@ function normalizeAnalysisResult(result: AIAnalysisResult): AIAnalysisResult {
   }
   
   // Normalize product
-  const validProducts = ["курс математики", "курс программирования", "курс английского", "подписка", "other"];
+  const validProducts = ["math_course", "programming_course", "english_course", "subscription", "other"];
   const productLower = String(result.product || "").toLowerCase();
   let product = "other";
   for (const vp of validProducts) {
@@ -226,7 +226,7 @@ function normalizeAnalysisResult(result: AIAnalysisResult): AIAnalysisResult {
   }
   
   // Normalize offer
-  const validOffers = ["бесплатный урок", "мастер-класс", "вебинар", "бесплатный курс", "скидка", "пробный период", "other"];
+  const validOffers = ["free_lesson", "masterclass", "webinar", "free_course", "discount", "trial", "other"];
   const offerLower = String(result.offer || "").toLowerCase();
   let offer = "other";
   for (const vo of validOffers) {

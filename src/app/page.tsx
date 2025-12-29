@@ -36,9 +36,9 @@ const OPTIONS = {
   style: ["Real", "3D", "Illustration", "Minecraft style", "Pixar style", "Cartoon", "Other"],
   mainTon: ["bright", "light", "dark", "soft", "neutral"],
   mainObject: ["city", "boy", "girl", "boy_girl", "statue", "building", "object", "people", "offline", "none", "other"],
-  uvp: ["прямая продажа", "через боль", "через выгоду", "FOMO", "социальное доказательство", "other"],
-  product: ["курс математики", "курс программирования", "курс английского", "подписка", "other"],
-  offer: ["бесплатный урок", "мастер-класс", "вебинар", "бесплатный курс", "скидка", "пробный период", "other"],
+  uvp: ["direct_sale", "pain_point", "benefit", "FOMO", "social_proof", "other"],
+  product: ["math_course", "programming_course", "english_course", "subscription", "other"],
+  offer: ["free_lesson", "masterclass", "webinar", "free_course", "discount", "trial", "other"],
 };
 
 // Compress image to max 2MB while maintaining quality

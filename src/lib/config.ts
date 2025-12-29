@@ -35,17 +35,16 @@ export const config = {
     filename: 14,        // N
   },
   
-  // Title sheet column mapping (1-indexed)
-  // A: Text_id | B: ID | C: RU | D: Eng | E: Header_text | F: UVP | G: Product | H: Offer
+  // Title sheet column mapping (1-indexed) - English only, no RU column
+  // A: Text_id | B: ID | C: Eng | D: Header_text | E: UVP | F: Product | G: Offer
   titleColumns: {
     textId: 1,           // A - formula
     id: 2,               // B
-    ru: 3,               // C - Google Translate formula
-    eng: 4,              // D
-    headerText: 5,       // E
-    uvp: 6,              // F
-    product: 7,          // G
-    offer: 8,            // H
+    eng: 3,              // C
+    headerText: 4,       // D
+    uvp: 5,              // E
+    product: 6,          // F
+    offer: 7,            // G
   },
   
   // Backward compatibility alias
@@ -64,9 +63,9 @@ export const OPTIONS = {
   style: ["Real", "3D", "Illustration", "Minecraft style", "Pixar style", "Cartoon", "Other"],
   mainTon: ["bright", "light", "dark", "soft", "neutral"],
   mainObject: ["city", "boy", "girl", "boy_girl", "statue", "building", "object", "people", "offline", "none", "other"],
-  uvp: ["прямая продажа", "через боль", "через выгоду", "FOMO", "социальное доказательство", "other"],
-  product: ["курс математики", "курс программирования", "курс английского", "подписка", "other"],
-  offer: ["бесплатный урок", "мастер-класс", "вебинар", "бесплатный курс", "скидка", "пробный период", "other"],
+  uvp: ["direct_sale", "pain_point", "benefit", "FOMO", "social_proof", "other"],
+  product: ["math_course", "programming_course", "english_course", "subscription", "other"],
+  offer: ["free_lesson", "masterclass", "webinar", "free_course", "discount", "trial", "other"],
 };
 
 export function validateConfig(): string[] {
