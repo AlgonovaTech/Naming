@@ -35,10 +35,13 @@ export async function uploadToDrive(
   mimeType: string,
   filename: string
 ): Promise<DriveUploadResult> {
+  console.log(`[Drive] Starting upload for: ${filename}, mime: ${mimeType}, size: ${base64Data.length} bytes`);
+  
   const drive = getDriveClient();
   
   // Convert base64 to buffer
   const buffer = Buffer.from(base64Data, "base64");
+  console.log(`[Drive] Buffer created, size: ${buffer.length} bytes`);
   
   // Create a unique filename with timestamp
   const timestamp = Date.now();
@@ -50,9 +53,12 @@ export async function uploadToDrive(
     parents: [DRIVE_FOLDER_ID],
   };
   
+  console.log(`[Drive] Uploading to folder: ${DRIVE_FOLDER_ID}`);
+  
+  const { Readable } = await import("stream");
   const media = {
     mimeType,
-    body: require("stream").Readable.from(buffer),
+    body: Readable.from(buffer),
   };
   
   const file = await drive.files.create({
@@ -61,7 +67,12 @@ export async function uploadToDrive(
     fields: "id, webViewLink, thumbnailLink",
   });
   
-  const fileId = file.data.id!;
+  const fileId = file.data.id;
+  if (!fileId) {
+    throw new Error("Drive upload failed: no file ID returned");
+  }
+  
+  console.log(`[Drive] File created with ID: ${fileId}`);
   
   // Make the file publicly viewable
   await drive.permissions.create({
@@ -72,9 +83,13 @@ export async function uploadToDrive(
     },
   });
   
+  console.log(`[Drive] Permissions set for file: ${fileId}`);
+  
   // Get the direct image URL that works with Google Sheets =IMAGE()
   // Format: https://drive.google.com/uc?export=view&id=FILE_ID
   const directUrl = `https://drive.google.com/uc?export=view&id=${fileId}`;
+  
+  console.log(`[Drive] Success! URL: ${directUrl}`);
   
   return {
     fileId,

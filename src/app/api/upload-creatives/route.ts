@@ -102,11 +102,17 @@ export async function POST(request: NextRequest) {
         // Upload to Google Drive first (for preview)
         let previewUrl = "";
         try {
+          console.log(`[Upload] Starting Drive upload for: ${file.name}`);
           const driveResult = await uploadToDrive(base64, file.type, file.name);
           previewUrl = driveResult.thumbnailLink;
-          console.log(`Uploaded to Drive: ${driveResult.fileId}`);
+          console.log(`[Upload] Drive success: ${driveResult.fileId}, URL: ${previewUrl}`);
         } catch (driveError) {
-          console.error(`Drive upload error for ${file.name}:`, driveError);
+          const errorMessage = driveError instanceof Error ? driveError.message : String(driveError);
+          console.error(`[Upload] Drive upload FAILED for ${file.name}:`, errorMessage);
+          // Check if it's an API not enabled error
+          if (errorMessage.includes("has not been used") || errorMessage.includes("disabled")) {
+            console.error("[Upload] Google Drive API may not be enabled!");
+          }
           // Continue without preview if Drive upload fails
         }
         
